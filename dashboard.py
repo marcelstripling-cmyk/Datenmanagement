@@ -257,220 +257,92 @@ def load_data():
     return df
 
 df = load_data()
-
 countries = sorted(df["Geo"].unique())
 
-tab1, tab2, tab3 = st.tabs([
+# Vier Tabs
+tab1, tab2, tab3, tab4 = st.tabs([
     "1. Preisspanne teuer ↔ günstig",
     "2. Durchschnitt vs. Median pro Land",
-    "3. Ausreißer ≥ ± XX % vom Mittelwert"
+    "3. Ausreißer ≥ ± XX % vom Mittelwert",
+    "4. Boxplot – Preisverteilung aller Länder"
 ])
 
-# Tab 1 – Preisverlauf mit Min/Max-Linien
+# Tab 1 – Liniendiagramm pro Land
 with tab1:
     st.subheader("1. Wie schwankt der Preis zwischen teuer und günstig?")
-    
-    selected_country_1 = st.selectbox(
-        "Land auswählen",
-        options=countries,
-        index=countries.index("Germany") if "Germany" in countries else 0,
-        key="country_tab1"
-    )
-    
-    df_country = df[df["Geo"] == selected_country_1]
-    
-    if not df_country.empty:
-        fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(
-            x=df_country["Time period"],
-            y=df_country["€/kWh"],
-            mode='lines+markers',
-            name='Preis €/kWh',
-            line=dict(color='royalblue', width=2.5),
-            marker=dict(size=8)
-        ))
-        fig1.add_hline(y=df_country["€/kWh"].max(), line_dash="dash", line_color="red",
-                       annotation_text=f"Max: {df_country['€/kWh'].max():.4f}", 
-                       annotation_position="top right")
-        fig1.add_hline(y=df_country["€/kWh"].min(), line_dash="dash", line_color="green",
-                       annotation_text=f"Min: {df_country['€/kWh'].min():.4f}", 
-                       annotation_position="bottom right")
-        fig1.update_layout(
-            title=f"Preisentwicklung {selected_country_1}",
-            xaxis_title="Time period",
-            yaxis_title="€/kWh",
-            height=520,
-            hovermode="x unified",
-            template="plotly_white"
-        )
-        st.plotly_chart(fig1, use_container_width=True)
-    else:
-        st.warning("Keine Daten für dieses Land.")
+    selected_country_1 = st.selectbox("Land auswählen", countries, index=countries.index("Germany") if "Germany" in countries else 0, key="t1")
+    df_c = df[df["Geo"] == selected_country_1]
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(x=df_c["Time period"], y=df_c["€/kWh"], mode='lines+markers', name='Preis', line=dict(color='royalblue', width=3)))
+    fig1.add_hline(y=df_c["€/kWh"].max(), line_dash="dash", line_color="red", annotation_text=f"Max: {df_c['€/kWh'].max():.4f}")
+    fig1.add_hline(y=df_c["€/kWh"].min(), line_dash="dash", line_color="green", annotation_text=f"Min: {df_c['€/kWh'].min():.4f}")
+    fig1.update_layout(title=f"Preisentwicklung {selected_country_1}", xaxis_title="Time period", yaxis_title="€/kWh", height=520, template="plotly_white")
+    st.plotly_chart(fig1, use_container_width=True)
 
-# Tab 2 – Balkendiagramm Durchschnitt & Median (ohne gestrichelte Linie)
+# Tab 2 – Balken Durchschnitt & Median
 with tab2:
     st.subheader("2. Unterschied Durchschnitt & Median im Preis")
-    
-    summary = df.groupby("Geo")["€/kWh"].agg(
-        Durchschnitt='mean',
-        Median='median'
-    ).reset_index()
-    
-    summary["Abweichung (%)"] = (
-        (summary["Durchschnitt"] - summary["Median"]) / summary["Median"] * 100
-    ).round(1)
-    
-    summary_melt = summary.melt(
-        id_vars=["Geo"],
-        value_vars=["Durchschnitt", "Median"],
-        var_name="Maß",
-        value_name="€/kWh"
-    )
-    
-    fig2 = px.bar(
-        summary_melt,
-        x="Geo",
-        y="€/kWh",
-        color="Maß",
-        barmode="group",
-        text_auto=".4f",
-        title="Durchschnitt und Median pro Land",
-        height=580
-    )
-    
-    fig2.update_layout(
-        xaxis_title="Land (Geo)",
-        yaxis_title="€/kWh",
-        legend_title="Maß",
-        hovermode="x unified",
-        template="plotly_white"
-    )
-    
+    summary = df.groupby("Geo")["€/kWh"].agg(Durchschnitt='mean', Median='median').reset_index()
+    summary_melt = summary.melt(id_vars="Geo", value_vars=["Durchschnitt", "Median"], var_name="Maß", value_name="€/kWh")
+    fig2 = px.bar(summary_melt, x="Geo", y="€/kWh", color="Maß", barmode="group", text_auto=".4f", title="Durchschnitt und Median pro Land", height=580)
+    fig2.update_layout(xaxis_title="Land", yaxis_title="€/kWh", template="plotly_white")
     st.plotly_chart(fig2, use_container_width=True)
-    
-    st.markdown("**Abweichung Durchschnitt vs. Median in Prozent**")
-    st.dataframe(
-        summary[["Geo", "Durchschnitt", "Median", "Abweichung (%)"]]
-        .style.format({
-            "Durchschnitt": "{:.4f}",
-            "Median": "{:.4f}",
-            "Abweichung (%)": "{:+.1f} %"
-        }),
-        use_container_width=True,
-        hide_index=True
-    )
 
-# Tab 3 – Punktwolkendiagramm mit Slider + Info-Text
+# Tab 3 – Ausreißer mit Slider
 with tab3:
     st.subheader("3. Ausreißer – Punktwolke mit anpassbarer Schwelle")
     
     st.markdown("""
-    **Information zur Ausreißer-Definition:**  
-    Als **mögliche Ausreißer** gelten Werte, welche eine Abweichung von **20–30 %** aufweisen.  
+    **Hinweis zur Ausreißer-Definition:**  
+    Als **mögliche Ausreißer** gelten Werte mit einer Abweichung von **20–30 %**.  
     Es handelt sich **fast immer um Ausreißer**, wenn eine Abweichung von **mindestens 50 %** vorliegt.  
-    Die Abweichung wird **immer vom Mittelwert** (arithmetisches Mittel) berechnet.
+    Die Abweichung wird immer **vom Mittelwert** (Durchschnitt) des jeweiligen Landes berechnet.
     """)
     
-    selected_country_3 = st.selectbox(
-        "Land auswählen",
-        options=countries,
-        index=countries.index("Germany") if "Germany" in countries else 0,
-        key="country_tab3"
-    )
+    selected_country_3 = st.selectbox("Land auswählen", countries, index=countries.index("Germany") if "Germany" in countries else 0, key="t3")
+    threshold_pct = st.slider("Mindest-Abweichung vom Mittelwert für Ausreißer", 5.0, 100.0, 20.0, 2.5, format="%.1f %%")
     
-    threshold_pct = st.slider(
-        "Mindest-Abweichung vom Mittelwert für Ausreißer",
-        min_value=5.0,
-        max_value=50.0,
-        value=20.0,
-        step=2.5,
-        format="%.1f %%"
-    )
+    df_c3 = df[df["Geo"] == selected_country_3].copy()
+    mean_val = df_c3["€/kWh"].mean()
+    df_c3["Abweichung_%"] = ((df_c3["€/kWh"] - mean_val) / mean_val * 100).round(1)
+    df_c3["Abs_Abweichung"] = df_c3["Abweichung_%"].abs()
+    df_c3["Ausreißer"] = f"innerhalb ±{threshold_pct}%"
+    df_c3.loc[df_c3["Abweichung_%"] >= threshold_pct, "Ausreißer"] = f"≥ +{threshold_pct}%"
+    df_c3.loc[df_c3["Abweichung_%"] <= -threshold_pct, "Ausreißer"] = f"≤ -{threshold_pct}%"
     
-    df_country3 = df[df["Geo"] == selected_country_3].copy()
+    color_map = {f"innerhalb ±{threshold_pct}%": "#95a5a6", f"≥ +{threshold_pct}%": "#e74c3c", f"≤ -{threshold_pct}%": "#3498db"}
     
-    if not df_country3.empty:
-        mean_value = df_country3["€/kWh"].mean()
-        
-        df_country3["Abweichung_%"] = ((df_country3["€/kWh"] - mean_value) / mean_value * 100).round(1)
-        df_country3["Abs_Abweichung"] = df_country3["Abweichung_%"].abs()
-        
-        df_country3["Ausreißer"] = f"innerhalb ±{threshold_pct}%"
-        df_country3.loc[df_country3["Abweichung_%"] >= threshold_pct, "Ausreißer"] = f"≥ +{threshold_pct}%"
-        df_country3.loc[df_country3["Abweichung_%"] <= -threshold_pct, "Ausreißer"] = f"≤ -{threshold_pct}%"
-        
-        color_map = {
-            f"innerhalb ±{threshold_pct}%": "#95a5a6",
-            f"≥ +{threshold_pct}%": "#e74c3c",
-            f"≤ -{threshold_pct}%": "#3498db"
-        }
-        
-        fig3 = px.scatter(
-            df_country3,
-            x="Time period",
-            y="€/kWh",
-            color="Ausreißer",
-            size="Abs_Abweichung",
-            size_max=20,
-            hover_data=["Abweichung_%", "Time period", "€/kWh"],
-            title=f"{selected_country_3} – Ausreißer ≥ ±{threshold_pct}% vom Mittelwert",
-            height=540,
-            color_discrete_map=color_map
-        )
-        
-        fig3.add_hline(
-            y=mean_value,
-            line_dash="dot",
-            line_color="black",
-            annotation_text=f"Mittelwert: {mean_value:.4f} €/kWh",
-            annotation_position="top right"
-        )
-        
-        fig3.add_hline(
-            y=mean_value * (1 + threshold_pct/100),
-            line_dash="dash",
-            line_color="red",
-            line_width=1.2,
-            annotation_text=f"+{threshold_pct}%",
-            annotation_position="top right"
-        )
-        
-        fig3.add_hline(
-            y=mean_value * (1 - threshold_pct/100),
-            line_dash="dash",
-            line_color="blue",
-            line_width=1.2,
-            annotation_text=f"–{threshold_pct}%",
-            annotation_position="bottom right"
-        )
-        
-        fig3.update_traces(
-            marker=dict(opacity=0.9, line=dict(width=1, color='DarkSlateGrey'))
-        )
-        
-        fig3.update_layout(
-            xaxis_title="Time period",
-            yaxis_title="€/kWh",
-            hovermode="closest",
-            template="plotly_white",
-            legend_title="Ausreißer-Typ"
-        )
-        
-        st.plotly_chart(fig3, use_container_width=True)
-        
-        outliers = df_country3[df_country3["Ausreißer"] != f"innerhalb ±{threshold_pct}%"]
-        if not outliers.empty:
-            st.info(f"Bei ±{threshold_pct}% Schwelle → {len(outliers)} Ausreißer gefunden")
-            st.dataframe(
-                outliers[["Time period", "€/kWh", "Abweichung_%", "Ausreißer"]]
-                .sort_values("Abweichung_%", ascending=False)
-                .style.format({"€/kWh": "{:.4f}", "Abweichung_%": "{:+.1f} %"}),
-                hide_index=True,
-                use_container_width=True
-            )
-        else:
-            st.success(f"Bei ±{threshold_pct}% Schwelle → keine Ausreißer gefunden")
-    else:
-        st.warning("Keine Daten für dieses Land.")
+    fig3 = px.scatter(df_c3, x="Time period", y="€/kWh", color="Ausreißer", size="Abs_Abweichung", size_max=20,
+                      title=f"{selected_country_3} – Ausreißer ≥ ±{threshold_pct}% vom Mittelwert", height=540, color_discrete_map=color_map)
+    fig3.add_hline(y=mean_val, line_dash="dot", line_color="black", annotation_text=f"Mittel: {mean_val:.4f}")
+    fig3.add_hline(y=mean_val * (1 + threshold_pct/100), line_dash="dash", line_color="red")
+    fig3.add_hline(y=mean_val * (1 - threshold_pct/100), line_dash="dash", line_color="blue")
+    fig3.update_layout(template="plotly_white", legend_title="Ausreißer")
+    st.plotly_chart(fig3, use_container_width=True)
 
-st.caption("Dashboard • Gaspreise EU Halbjahresdaten • Januar 2026")
+# Tab 4 – Boxplot aller Länder
+with tab4:
+    st.subheader("4. Boxplot – Preisverteilung aller Länder (2020–2025)")
+    
+    fig4 = px.box(
+        df,
+        x="Geo",
+        y="€/kWh",
+        points="outliers",  # Zeigt Ausreißer als Punkte an
+        title="Verteilung der Gaspreise pro Land (inkl. Ausreißer)",
+        height=620,
+        color="Geo"
+    )
+    
+    fig4.update_layout(
+        xaxis_title="Land",
+        yaxis_title="€/kWh",
+        showlegend=False,
+        template="plotly_white"
+    )
+    
+    st.plotly_chart(fig4, use_container_width=True)
+    
+    st.info("Der Boxplot zeigt pro Land: Median (Linie), 25.–75. Perzentil (Box), Whisker (1,5× IQR) und Ausreißer (Punkte).")
+
+st.caption("Dashboard erstellt von Marcel aus Aalen • Gaspreise EU 2020–2025 • Januar 2026")
