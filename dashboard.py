@@ -269,7 +269,7 @@ countries = sorted(df["Geo"].unique())
 tab1, tab2, tab3 = st.tabs([
     "1. Preisspanne teuer ↔ günstig",
     "2. Durchschnitt vs. Median pro Land",
-    "3. Ausreißer ≥ ±20 % vom Mittelwert"
+    "3. Ausreißer ≥ ± XX % vom Mittelwert"
 ])
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -384,10 +384,10 @@ with tab2:
     st.plotly_chart(fig2, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────────────
-# Tab 3 – Punktwolkendiagramm mit Ausreißern ≥ ±20 % vom Mittelwert
+# Tab 3 – Punktwolkendiagramm mit anpassbarer Ausreißer-Schwelle
 # ────────────────────────────────────────────────────────────────────────────
 with tab3:
-    st.subheader("3. Ausreißer ≥ ±20 % vom Mittelwert – Punktwolke")
+    st.subheader("3. Ausreißer – Punktwolke mit anpassbarer Schwelle")
     
     selected_country_3 = st.selectbox(
         "Land auswählen",
@@ -396,17 +396,28 @@ with tab3:
         key="country_tab3"
     )
     
+    threshold_pct = st.slider(
+        "Mindest-Abweichung vom Mittelwert für Ausreißer",
+        min_value=5.0,
+        max_value=50.0,
+        value=20.0,
+        step=2.5,
+        format="%.1f %%"
+    )
+    
     df_country3 = df[df["Geo"] == selected_country_3].copy()
     
     if not df_country3.empty:
         # Mittelwert (Durchschnitt) pro Land
         mean_value = df_country3["€/kWh"].mean()
         
-        # Ausreißer-Definition: ≥ 20 % Abweichung vom Mittelwert
+        # Abweichung in %
         df_country3["Abweichung_%"] = ((df_country3["€/kWh"] - mean_value) / mean_value * 100).round(1)
-        df_country3["Ausreißer"] = "normal"
-        df_country3.loc[df_country3["Abweichung_%"] >= 20, "Ausreißer"] = "positiv ≥ +20%"
-        df_country3.loc[df_country3["Abweichung_%"] <= -20, "Ausreißer"] = "negativ ≤ -20%"
+        
+        # Ausreißer-Definition
+        df_country3["Ausreißer"] = "innerhalb ±" + str(threshold_pct) + "%"
+        df_country3.loc[df_country3["Abweichung_%"] >= threshold_pct, "Ausreißer"] = f"≥ +{threshold_pct}%"
+        df_country3.loc[df_country3["Abweichung_%"] <= -threshold_pct, "Ausreißer"] = f"≤ -{threshold_pct}%"
         
         fig3 = px.scatter(
             df_country3,
@@ -414,14 +425,14 @@ with tab3:
             y="€/kWh",
             color="Ausreißer",
             size="Abweichung_%",
-            size_max=18,
-            hover_data=["Abweichung_%", "Time period"],
-            title=f"{selected_country_3} – Ausreißer ≥ ±20 % vom Mittelwert",
+            size_max=20,
+            hover_data=["Abweichung_%", "Time period", "€/kWh"],
+            title=f"{selected_country_3} – Ausreißer ≥ ±{threshold_pct}% vom Mittelwert",
             height=540,
             color_discrete_map={
-                "normal": "#95a5a6",
-                "positiv ≥ +20%": "#c0392b",
-                "negativ ≤ -20%": "#2980b9"
+                f"innerhalb ±{threshold_pct}%": "#95a5a6",
+                f"≥ +{threshold_pct}%": "#c0392b",
+                f"≤ -{threshold_pct}%": "#2980b9"
             }
         )
         
@@ -434,14 +445,14 @@ with tab3:
             annotation_position="top right"
         )
         
-        # ±20 %-Bänder
-        fig3.add_hline(y=mean_value * 1.20, line_dash="dash", line_color="red", line_width=1,
-                       annotation_text="+20%", annotation_position="top right")
-        fig3.add_hline(y=mean_value * 0.80, line_dash="dash", line_color="blue", line_width=1,
-                       annotation_text="–20%", annotation_position="bottom right")
+        # ± Schwellen-Bänder
+        fig3.add_hline(y=mean_value * (1 + threshold_pct/100), line_dash="dash", line_color="red", line_width=1.2,
+                       annotation_text=f"+{threshold_pct}%", annotation_position="top right")
+        fig3.add_hline(y=mean_value * (1 - threshold_pct/100), line_dash="dash", line_color="blue", line_width=1.2,
+                       annotation_text=f"–{threshold_pct}%", annotation_position="bottom right")
         
         fig3.update_traces(
-            marker=dict(opacity=0.9, line=dict(width=1, color='DarkSlateGrey'))
+            marker=dict(opacity=0.88, line=dict(width=1, color='DarkSlateGrey'))
         )
         
         fig3.update_layout(
@@ -449,23 +460,25 @@ with tab3:
             yaxis_title="€/kWh",
             hovermode="closest",
             template="plotly_white",
-            legend_title="Ausreißer-Typ"
+            legend_title="Kategorie"
         )
         
         st.plotly_chart(fig3, use_container_width=True)
         
-        outlier_df = df_country3[df_country3["Ausreißer"] != "normal"]
+        outlier_df = df_country3[~df_country3["Ausreißer"].str.contains("innerhalb")]
         outlier_count = len(outlier_df)
         
         if outlier_count > 0:
-            st.info(f"{outlier_count} Ausreißer mit ≥ ±20 % Abweichung vom Mittelwert gefunden.")
+            st.info(f"Bei ±{threshold_pct}% Schwelle → {outlier_count} Ausreißer gefunden")
             st.dataframe(
-                outlier_df[["Time period", "€/kWh", "Abweichung_%", "Ausreißer"]].sort_values("Abweichung_%", ascending=False),
+                outlier_df[["Time period", "€/kWh", "Abweichung_%", "Ausreißer"]]
+                .sort_values("Abweichung_%", ascending=False)
+                .style.format({"€/kWh": "{:.4f}", "Abweichung_%": "{:+.1f} %"}),
                 hide_index=True,
                 use_container_width=True
             )
         else:
-            st.success("Keine Werte mit ≥ ±20 % Abweichung vom Mittelwert gefunden.")
+            st.success(f"Bei ±{threshold_pct}% Schwelle → keine Ausreißer gefunden")
     else:
         st.warning("Keine Daten für dieses Land.")
 
