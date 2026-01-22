@@ -269,11 +269,11 @@ countries = sorted(df["Geo"].unique())
 tab1, tab2, tab3 = st.tabs([
     "1. Preisspanne teuer ↔ günstig",
     "2. Durchschnitt vs. Median pro Land",
-    "3. Positive & negative Ausreißer"
+    "3. Positive & negative Ausreißer (Punktwolke)"
 ])
 
 # ────────────────────────────────────────────────────────────────────────────
-# Tab 1 – Preisspanne (Min–Max) pro ausgewähltem Land
+# Tab 1 – Preisverlauf mit Min/Max-Linien (Liniendiagramm)
 # ────────────────────────────────────────────────────────────────────────────
 with tab1:
     st.subheader("1. Wie schwankt der Preis zwischen teuer und günstig?")
@@ -282,7 +282,7 @@ with tab1:
         "Land auswählen",
         options=countries,
         index=countries.index("Germany") if "Germany" in countries else 0,
-        key="country1"
+        key="country_tab1"
     )
     
     df_country = df[df["Geo"] == selected_country_1]
@@ -308,7 +308,7 @@ with tab1:
                        annotation_position="bottom right")
         
         fig1.update_layout(
-            title=f"Preisentwicklung {selected_country_1} – teuer ↔ günstig",
+            title=f"Preisentwicklung {selected_country_1}",
             xaxis_title="Time period",
             yaxis_title="€/kWh",
             height=520,
@@ -318,25 +318,25 @@ with tab1:
         
         st.plotly_chart(fig1, use_container_width=True)
     else:
-        st.warning("Keine Daten für dieses Land vorhanden.")
+        st.warning("Keine Daten für dieses Land.")
 
 # ────────────────────────────────────────────────────────────────────────────
-# Tab 2 – Durchschnitt & Median pro Land (Balkendiagramm)
+# Tab 2 – Balkendiagramm Durchschnitt & Median + %-Differenz
 # ────────────────────────────────────────────────────────────────────────────
 with tab2:
-    st.subheader("2. Unterschied Durchschnitt (%) & Median im Preis")
+    st.subheader("2. Unterschied Durchschnitt & Median im Preis")
     
     summary = df.groupby("Geo")["€/kWh"].agg(
         Durchschnitt='mean',
         Median='median'
     ).reset_index()
     
-    summary["Durchschnitt vs Median (%)"] = (
+    summary["Abweichung (%)"] = (
         (summary["Durchschnitt"] - summary["Median"]) / summary["Median"] * 100
     ).round(1)
     
     summary_melt = summary.melt(
-        id_vars=["Geo", "Durchschnitt vs Median (%)"],
+        id_vars=["Geo", "Abweichung (%)"],
         value_vars=["Durchschnitt", "Median"],
         var_name="Maß",
         value_name="€/kWh"
@@ -353,15 +353,14 @@ with tab2:
         height=580
     )
     
-    # Sekundärachse für Prozentdifferenz
     fig2.add_trace(
         go.Scatter(
             x=summary["Geo"],
-            y=summary["Durchschnitt vs Median (%)"],
+            y=summary["Abweichung (%)"],
             name="Abweichung (%)",
             yaxis="y2",
             mode="lines+markers+text",
-            text=summary["Durchschnitt vs Median (%)"].astype(str) + " %",
+            text=summary["Abweichung (%)"].astype(str) + " %",
             textposition="top center",
             line=dict(color="darkgoldenrod", width=2.5, dash="dot"),
             marker=dict(size=10, symbol="diamond")
@@ -385,75 +384,65 @@ with tab2:
     st.plotly_chart(fig2, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────────────
-# Tab 3 – Ausreißer pro Land (Linie + Markierungen für Extremwerte)
+# Tab 3 – Punktwolkendiagramm (Scatter) mit Ausreißer-Markierung
 # ────────────────────────────────────────────────────────────────────────────
 with tab3:
-    st.subheader("3. Visualisierung positiver & negativer Ausreißer")
+    st.subheader("3. Positive & negative Ausreißer – Punktwolkendiagramm")
     
     selected_country_3 = st.selectbox(
         "Land auswählen (Ausreißer-Ansicht)",
         options=countries,
         index=countries.index("Germany") if "Germany" in countries else 0,
-        key="country3"
+        key="country_tab3"
     )
     
     df_country3 = df[df["Geo"] == selected_country_3].copy()
     
     if not df_country3.empty:
-        # Einfache Regel: > 1.5 × Median oder < 0.5 × Median als Ausreißer markieren
+        # Ausreißer-Definition: > 1.5× Median oder < 0.65× Median
         med = df_country3["€/kWh"].median()
         df_country3["Ausreißer"] = "normal"
         df_country3.loc[df_country3["€/kWh"] > 1.5 * med, "Ausreißer"] = "positiv (sehr teuer)"
         df_country3.loc[df_country3["€/kWh"] < 0.65 * med, "Ausreißer"] = "negativ (sehr günstig)"
         
-        fig3 = px.line(
+        fig3 = px.scatter(
             df_country3,
             x="Time period",
             y="€/kWh",
-            title=f"Ausreißer-Analyse {selected_country_3}",
-            markers=True,
-            height=540
+            color="Ausreißer",
+            size="€/kWh",
+            hover_name="Time period",
+            title=f"Ausreißer {selected_country_3} – Punktwolke",
+            height=540,
+            color_discrete_map={
+                "normal": "#7f8c8d",
+                "positiv (sehr teuer)": "#e74c3c",
+                "negativ (sehr günstig)": "#3498db"
+            }
         )
         
-        # Ausreißer hervorheben
-        outliers_pos = df_country3[df_country3["Ausreißer"].str.contains("positiv")]
-        outliers_neg = df_country3[df_country3["Ausreißer"].str.contains("negativ")]
-        
-        if not outliers_pos.empty:
-            fig3.add_scatter(
-                x=outliers_pos["Time period"],
-                y=outliers_pos["€/kWh"],
-                mode="markers+text",
-                name="positiver Ausreißer",
-                marker=dict(color="red", size=12, symbol="star"),
-                text=outliers_pos["€/kWh"].round(4).astype(str),
-                textposition="top center"
+        fig3.update_traces(
+            marker=dict(
+                opacity=0.85,
+                line=dict(width=1, color='DarkSlateGrey')
             )
-        
-        if not outliers_neg.empty:
-            fig3.add_scatter(
-                x=outliers_neg["Time period"],
-                y=outliers_neg["€/kWh"],
-                mode="markers+text",
-                name="negativer Ausreißer",
-                marker=dict(color="blue", size=12, symbol="diamond-x"),
-                text=outliers_neg["€/kWh"].round(4).astype(str),
-                textposition="bottom center"
-            )
+        )
         
         fig3.update_layout(
             xaxis_title="Time period",
             yaxis_title="€/kWh",
-            hovermode="x unified",
-            template="plotly_white"
+            hovermode="closest",
+            template="plotly_white",
+            legend_title="Ausreißer-Typ"
         )
         
         st.plotly_chart(fig3, use_container_width=True)
         
-        if df_country3["Ausreißer"].str.contains("Ausreißer").any():
-            st.info("Ausreißer sind als besondere Marker hervorgehoben (Stern = sehr teuer, Diamant-X = sehr günstig).")
+        outlier_count = len(df_country3[df_country3["Ausreißer"] != "normal"])
+        if outlier_count > 0:
+            st.info(f"{outlier_count} Ausreißer markiert (rot = sehr teuer, blau = sehr günstig)")
         else:
-            st.success("Keine starken Ausreißer nach dieser Definition erkannt.")
+            st.success("Keine starken Ausreißer nach dieser Methode erkannt.")
     else:
         st.warning("Keine Daten für dieses Land.")
 
