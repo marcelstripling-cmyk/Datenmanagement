@@ -266,9 +266,7 @@ tab1, tab2, tab3 = st.tabs([
     "3. Ausreißer ≥ ± XX % vom Mittelwert"
 ])
 
-# ────────────────────────────────────────────────────────────────────────────
 # Tab 1 – Preisverlauf mit Min/Max-Linien
-# ────────────────────────────────────────────────────────────────────────────
 with tab1:
     st.subheader("1. Wie schwankt der Preis zwischen teuer und günstig?")
     
@@ -283,7 +281,6 @@ with tab1:
     
     if not df_country.empty:
         fig1 = go.Figure()
-        
         fig1.add_trace(go.Scatter(
             x=df_country["Time period"],
             y=df_country["€/kWh"],
@@ -292,15 +289,12 @@ with tab1:
             line=dict(color='royalblue', width=2.5),
             marker=dict(size=8)
         ))
-        
         fig1.add_hline(y=df_country["€/kWh"].max(), line_dash="dash", line_color="red",
                        annotation_text=f"Max: {df_country['€/kWh'].max():.4f}", 
                        annotation_position="top right")
-        
         fig1.add_hline(y=df_country["€/kWh"].min(), line_dash="dash", line_color="green",
                        annotation_text=f"Min: {df_country['€/kWh'].min():.4f}", 
                        annotation_position="bottom right")
-        
         fig1.update_layout(
             title=f"Preisentwicklung {selected_country_1}",
             xaxis_title="Time period",
@@ -309,14 +303,11 @@ with tab1:
             hovermode="x unified",
             template="plotly_white"
         )
-        
         st.plotly_chart(fig1, use_container_width=True)
     else:
         st.warning("Keine Daten für dieses Land.")
 
-# ────────────────────────────────────────────────────────────────────────────
-# Tab 2 – Balkendiagramm Durchschnitt & Median (ohne gestrichelte Abweichungslinie)
-# ────────────────────────────────────────────────────────────────────────────
+# Tab 2 – Balkendiagramm Durchschnitt & Median (ohne gestrichelte Linie)
 with tab2:
     st.subheader("2. Unterschied Durchschnitt & Median im Preis")
     
@@ -330,7 +321,7 @@ with tab2:
     ).round(1)
     
     summary_melt = summary.melt(
-        id_vars=["Geo", "Abweichung (%)"],
+        id_vars=["Geo"],
         value_vars=["Durchschnitt", "Median"],
         var_name="Maß",
         value_name="€/kWh"
@@ -347,8 +338,6 @@ with tab2:
         height=580
     )
     
-    # → Die gestrichelte Linie wurde entfernt
-    
     fig2.update_layout(
         xaxis_title="Land (Geo)",
         yaxis_title="€/kWh",
@@ -359,8 +348,7 @@ with tab2:
     
     st.plotly_chart(fig2, use_container_width=True)
     
-    # Optional: Die %-Abweichung trotzdem noch als Text in der Tabelle zeigen
-    st.write("**Abweichung Durchschnitt vs. Median in Prozent**")
+    st.markdown("**Abweichung Durchschnitt vs. Median in Prozent**")
     st.dataframe(
         summary[["Geo", "Durchschnitt", "Median", "Abweichung (%)"]]
         .style.format({
@@ -372,11 +360,16 @@ with tab2:
         hide_index=True
     )
 
-# ────────────────────────────────────────────────────────────────────────────
-# Tab 3 – Punktwolkendiagramm mit Slider
-# ────────────────────────────────────────────────────────────────────────────
+# Tab 3 – Punktwolkendiagramm mit Slider + Info-Text
 with tab3:
     st.subheader("3. Ausreißer – Punktwolke mit anpassbarer Schwelle")
+    
+    st.markdown("""
+    **Information zur Ausreißer-Definition:**  
+    Als **mögliche Ausreißer** gelten Werte, welche eine Abweichung von **20–30 %** aufweisen.  
+    Es handelt sich **fast immer um Ausreißer**, wenn eine Abweichung von **mindestens 50 %** vorliegt.  
+    Die Abweichung wird **immer vom Mittelwert** (arithmetisches Mittel) berechnet.
+    """)
     
     selected_country_3 = st.selectbox(
         "Land auswählen",
