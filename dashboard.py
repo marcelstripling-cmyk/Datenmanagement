@@ -4,10 +4,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from io import StringIO
 
-st.set_page_config(page_title="Gaspreise Analyse", layout="wide")
+st.set_page_config(page_title="Gaspreise für Haushaltskunden ab 2020-25", layout="wide")
 
-st.title("Gaspreise EU – Analyse Halbjahresdaten")
-st.markdown("Daten: Haushalts-Gaspreise inkl. Steuern & Abgaben in €/kWh")
+st.title("Gaspreise für Haushaltskunden ab 2020-25")
+st.markdown("Daten: Haushalts-Gaspreise inkl. Steuern & Abgaben in €/kWh – Halbjahreswerte")
 
 # ── Daten einbinden ────────────────────────────────────────────────────────
 CSV_DATA = """﻿Unit;Tax;Currency;Geo;Time period;€/kWh;EU?
@@ -259,7 +259,6 @@ def load_data():
 df = load_data()
 countries = sorted(df["Geo"].unique())
 
-# Vier Tabs
 tab1, tab2, tab3, tab4 = st.tabs([
     "1. Preisspanne teuer ↔ günstig",
     "2. Durchschnitt vs. Median pro Land",
@@ -279,7 +278,7 @@ with tab1:
     fig1.update_layout(title=f"Preisentwicklung {selected_country_1}", xaxis_title="Time period", yaxis_title="€/kWh", height=520, template="plotly_white")
     st.plotly_chart(fig1, use_container_width=True)
 
-# Tab 2 – Balken Durchschnitt & Median
+# Tab 2 – Balken Durchschnitt & Median (ohne gestrichelte Linie)
 with tab2:
     st.subheader("2. Unterschied Durchschnitt & Median im Preis")
     summary = df.groupby("Geo")["€/kWh"].agg(Durchschnitt='mean', Median='median').reset_index()
@@ -294,9 +293,9 @@ with tab3:
     
     st.markdown("""
     **Hinweis zur Ausreißer-Definition:**  
-    Als **mögliche Ausreißer** gelten Werte mit einer Abweichung von **20–30 %**.  
+    Als **mögliche Ausreißer** gelten Werte, welche eine Abweichung von **20–30 %** aufweisen.  
     Es handelt sich **fast immer um Ausreißer**, wenn eine Abweichung von **mindestens 50 %** vorliegt.  
-    Die Abweichung wird immer **vom Mittelwert** (Durchschnitt) des jeweiligen Landes berechnet.
+    Die Abweichung geht immer vom **Mittelwert** (arithmetisches Mittel) des jeweiligen Landes aus.
     """)
     
     selected_country_3 = st.selectbox("Land auswählen", countries, index=countries.index("Germany") if "Germany" in countries else 0, key="t3")
@@ -328,7 +327,7 @@ with tab4:
         df,
         x="Geo",
         y="€/kWh",
-        points="outliers",  # Zeigt Ausreißer als Punkte an
+        points="outliers",           # zeigt Ausreißer als einzelne Punkte
         title="Verteilung der Gaspreise pro Land (inkl. Ausreißer)",
         height=620,
         color="Geo"
@@ -343,6 +342,6 @@ with tab4:
     
     st.plotly_chart(fig4, use_container_width=True)
     
-    st.info("Der Boxplot zeigt pro Land: Median (Linie), 25.–75. Perzentil (Box), Whisker (1,5× IQR) und Ausreißer (Punkte).")
+    st.info("Der Boxplot zeigt pro Land: Median (mittlere Linie), 25.–75. Perzentil (Box), Whisker (1,5× IQR) und Ausreißer (einzelne Punkte).")
 
-st.caption("Dashboard erstellt von Marcel aus Aalen • Gaspreise EU 2020–2025 • Januar 2026")
+st.caption("Dashboard • Gaspreise für Haushaltskunden ab 2020-25 • Januar 2026")
