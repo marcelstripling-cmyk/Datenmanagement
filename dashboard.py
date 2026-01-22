@@ -1,7 +1,3 @@
-# dashboard.py
-# Empfohlene Installation:
-# pip install streamlit pandas plotly
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -262,10 +258,8 @@ def load_data():
 
 df = load_data()
 
-# ── Länderliste für Auswahl ────────────────────────────────────────────────
 countries = sorted(df["Geo"].unique())
 
-# ── Tabs für die drei Fragen ───────────────────────────────────────────────
 tab1, tab2, tab3 = st.tabs([
     "1. Preisspanne teuer ↔ günstig",
     "2. Durchschnitt vs. Median pro Land",
@@ -273,7 +267,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ────────────────────────────────────────────────────────────────────────────
-# Tab 1 – Preisverlauf mit Min/Max-Linien (Liniendiagramm)
+# Tab 1 – Preisverlauf mit Min/Max-Linien
 # ────────────────────────────────────────────────────────────────────────────
 with tab1:
     st.subheader("1. Wie schwankt der Preis zwischen teuer und günstig?")
@@ -384,7 +378,7 @@ with tab2:
     st.plotly_chart(fig2, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────────────
-# Tab 3 – Punktwolkendiagramm mit anpassbarer Ausreißer-Schwelle
+# Tab 3 – Punktwolkendiagramm mit Slider für Ausreißer-Schwelle
 # ────────────────────────────────────────────────────────────────────────────
 with tab3:
     st.subheader("3. Ausreißer – Punktwolke mit anpassbarer Schwelle")
@@ -408,35 +402,34 @@ with tab3:
     df_country3 = df[df["Geo"] == selected_country_3].copy()
     
     if not df_country3.empty:
-        # Mittelwert (Durchschnitt) pro Land
         mean_value = df_country3["€/kWh"].mean()
         
-        # Abweichung in %
         df_country3["Abweichung_%"] = ((df_country3["€/kWh"] - mean_value) / mean_value * 100).round(1)
+        df_country3["Abs_Abweichung"] = df_country3["Abweichung_%"].abs()
         
-        # Ausreißer-Definition
-        df_country3["Ausreißer"] = "innerhalb ±" + str(threshold_pct) + "%"
+        df_country3["Ausreißer"] = f"innerhalb ±{threshold_pct}%"
         df_country3.loc[df_country3["Abweichung_%"] >= threshold_pct, "Ausreißer"] = f"≥ +{threshold_pct}%"
         df_country3.loc[df_country3["Abweichung_%"] <= -threshold_pct, "Ausreißer"] = f"≤ -{threshold_pct}%"
+        
+        color_map = {
+            f"innerhalb ±{threshold_pct}%": "#95a5a6",
+            f"≥ +{threshold_pct}%": "#e74c3c",
+            f"≤ -{threshold_pct}%": "#3498db"
+        }
         
         fig3 = px.scatter(
             df_country3,
             x="Time period",
             y="€/kWh",
             color="Ausreißer",
-            size="Abweichung_%",
+            size="Abs_Abweichung",
             size_max=20,
             hover_data=["Abweichung_%", "Time period", "€/kWh"],
             title=f"{selected_country_3} – Ausreißer ≥ ±{threshold_pct}% vom Mittelwert",
             height=540,
-            color_discrete_map={
-                f"innerhalb ±{threshold_pct}%": "#95a5a6",
-                f"≥ +{threshold_pct}%": "#c0392b",
-                f"≤ -{threshold_pct}%": "#2980b9"
-            }
+            color_discrete_map=color_map
         )
         
-        # Mittelwert-Linie
         fig3.add_hline(
             y=mean_value,
             line_dash="dot",
@@ -445,14 +438,26 @@ with tab3:
             annotation_position="top right"
         )
         
-        # ± Schwellen-Bänder
-        fig3.add_hline(y=mean_value * (1 + threshold_pct/100), line_dash="dash", line_color="red", line_width=1.2,
-                       annotation_text=f"+{threshold_pct}%", annotation_position="top right")
-        fig3.add_hline(y=mean_value * (1 - threshold_pct/100), line_dash="dash", line_color="blue", line_width=1.2,
-                       annotation_text=f"–{threshold_pct}%", annotation_position="bottom right")
+        fig3.add_hline(
+            y=mean_value * (1 + threshold_pct/100),
+            line_dash="dash",
+            line_color="red",
+            line_width=1.2,
+            annotation_text=f"+{threshold_pct}%",
+            annotation_position="top right"
+        )
+        
+        fig3.add_hline(
+            y=mean_value * (1 - threshold_pct/100),
+            line_dash="dash",
+            line_color="blue",
+            line_width=1.2,
+            annotation_text=f"–{threshold_pct}%",
+            annotation_position="bottom right"
+        )
         
         fig3.update_traces(
-            marker=dict(opacity=0.88, line=dict(width=1, color='DarkSlateGrey'))
+            marker=dict(opacity=0.9, line=dict(width=1, color='DarkSlateGrey'))
         )
         
         fig3.update_layout(
@@ -460,18 +465,16 @@ with tab3:
             yaxis_title="€/kWh",
             hovermode="closest",
             template="plotly_white",
-            legend_title="Kategorie"
+            legend_title="Ausreißer-Typ"
         )
         
         st.plotly_chart(fig3, use_container_width=True)
         
-        outlier_df = df_country3[~df_country3["Ausreißer"].str.contains("innerhalb")]
-        outlier_count = len(outlier_df)
-        
-        if outlier_count > 0:
-            st.info(f"Bei ±{threshold_pct}% Schwelle → {outlier_count} Ausreißer gefunden")
+        outliers = df_country3[df_country3["Ausreißer"] != f"innerhalb ±{threshold_pct}%"]
+        if not outliers.empty:
+            st.info(f"Bei ±{threshold_pct}% Schwelle → {len(outliers)} Ausreißer gefunden")
             st.dataframe(
-                outlier_df[["Time period", "€/kWh", "Abweichung_%", "Ausreißer"]]
+                outliers[["Time period", "€/kWh", "Abweichung_%", "Ausreißer"]]
                 .sort_values("Abweichung_%", ascending=False)
                 .style.format({"€/kWh": "{:.4f}", "Abweichung_%": "{:+.1f} %"}),
                 hide_index=True,
