@@ -50,34 +50,48 @@ if uploaded_file is not None and st.session_state.df is None:
 if st.session_state.df is not None:
     df = st.session_state.df
     
-    # ── Spaltenauswahl ───────────────────────────────────────────
-    col1, col2, col3 = st.columns([2,2,1.5])
+    # ── Spaltenauswahl – mit Fehlersicherung ─────────────────────────
+st.subheader("Spaltenzuordnung")
+
+col1, col2, col3 = st.columns([2, 2, 1.5])
+
+with col1:
+    x_col = st.selectbox(
+        "X-Achse (meist Jahr / Zeit)",
+        options=df.columns.tolist(),
+        index=df.columns.get_loc(st.session_state.default_year) if st.session_state.get("default_year") in df.columns else 0,
+        key="x_col"
+    )
+
+with col2:
+    numeric_cols = df.select_dtypes(include="number").columns.tolist()
     
-    with col1:
-        x_col = st.selectbox(
-            "X-Achse (meist Jahr / Zeit)",
-            options = df.columns.tolist(),
-            index = df.columns.get_loc(st.session_state.default_year) if st.session_state.default_year else 0,
-            key = "x_col"
-        )
-    
-    with col2:
+    if not numeric_cols:
+        st.error("Keine numerischen Spalten in der CSV gefunden → Preis-Analyse nicht möglich.")
+        y_col = None
+    else:
+        default_idx = 0
+        if st.session_state.get("default_price") in numeric_cols:
+            default_idx = numeric_cols.index(st.session_state.default_price)
+        
         y_col = st.selectbox(
             "Y-Achse (Preis)",
-            options = df.select_dtypes(include="number").columns.tolist(),
-            index = df.columns.get_loc(st.session_state.default_price) if st.session_state.default_price in df.select_dtypes(include="number").columns else 0,
-            key = "y_col"
+            options=numeric_cols,
+            index=default_idx,
+            key="y_col"
         )
-    
-    with col3:
-        group_col = st.selectbox(
-            "Gruppieren / Farbe nach (optional)",
-            options = ["Keine"] + df.columns.tolist(),
-            index = 0,
-            key = "group_col"
-        )
-    
-    st.markdown("---")
+
+with col3:
+    group_col = st.selectbox(
+        "Gruppieren / Farbe nach (optional)",
+        options=["Keine"] + df.columns.tolist(),
+        index=0,
+        key="group_col"
+    )
+
+# Früher abbrechen, wenn keine Preisspalte vorhanden
+if y_col is None:
+    st.stop()   # Stoppt die Ausführung hier – verhindert spätere Fehler
     
     # ── Die drei vorgegebenen Analysen ────────────────────────────
     analyses = [
