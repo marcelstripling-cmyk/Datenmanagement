@@ -315,7 +315,7 @@ with tab1:
         st.warning("Keine Daten für dieses Land.")
 
 # ────────────────────────────────────────────────────────────────────────────
-# Tab 2 – Balkendiagramm Durchschnitt & Median + %-Differenz
+# Tab 2 – Balkendiagramm Durchschnitt & Median (ohne gestrichelte Abweichungslinie)
 # ────────────────────────────────────────────────────────────────────────────
 with tab2:
     st.subheader("2. Unterschied Durchschnitt & Median im Preis")
@@ -347,38 +347,33 @@ with tab2:
         height=580
     )
     
-    fig2.add_trace(
-        go.Scatter(
-            x=summary["Geo"],
-            y=summary["Abweichung (%)"],
-            name="Abweichung (%)",
-            yaxis="y2",
-            mode="lines+markers+text",
-            text=summary["Abweichung (%)"].astype(str) + " %",
-            textposition="top center",
-            line=dict(color="darkgoldenrod", width=2.5, dash="dot"),
-            marker=dict(size=10, symbol="diamond")
-        )
-    )
+    # → Die gestrichelte Linie wurde entfernt
     
     fig2.update_layout(
-        yaxis_title="€/kWh",
-        yaxis2=dict(
-            title="Durchschnitt vs Median (%)",
-            overlaying="y",
-            side="right",
-            showgrid=False
-        ),
         xaxis_title="Land (Geo)",
-        legend_title="Legende",
+        yaxis_title="€/kWh",
+        legend_title="Maß",
         hovermode="x unified",
         template="plotly_white"
     )
     
     st.plotly_chart(fig2, use_container_width=True)
+    
+    # Optional: Die %-Abweichung trotzdem noch als Text in der Tabelle zeigen
+    st.write("**Abweichung Durchschnitt vs. Median in Prozent**")
+    st.dataframe(
+        summary[["Geo", "Durchschnitt", "Median", "Abweichung (%)"]]
+        .style.format({
+            "Durchschnitt": "{:.4f}",
+            "Median": "{:.4f}",
+            "Abweichung (%)": "{:+.1f} %"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
 
 # ────────────────────────────────────────────────────────────────────────────
-# Tab 3 – Punktwolkendiagramm mit Slider für Ausreißer-Schwelle
+# Tab 3 – Punktwolkendiagramm mit Slider
 # ────────────────────────────────────────────────────────────────────────────
 with tab3:
     st.subheader("3. Ausreißer – Punktwolke mit anpassbarer Schwelle")
