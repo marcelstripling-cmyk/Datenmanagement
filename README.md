@@ -25,7 +25,7 @@ streamlit run dashboard.py
 
 ## Technologien
 
-- Python 3.10+  
+- Python 
 - pandas  
 - Streamlit  
 - Plotly  
